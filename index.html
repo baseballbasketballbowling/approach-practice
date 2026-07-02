@@ -123,7 +123,16 @@
   /* ---- 設定 ---- */
   details{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
   summary{font-size:13px;color:var(--mist);cursor:pointer;list-style:none}
-  summary::before{content:"⚙ "}
+  .s-gear::before{content:"⚙ "}
+  .s-growth::before{content:"📈 "}
+  .growth-sum{font-size:13px;color:var(--mist);margin:12px 0 8px}
+  .growth-sum b{color:var(--chalk);font-size:15px}
+  #chart{width:100%;height:190px;display:block;margin:4px 0 6px}
+  .chart-note{font-size:11px;color:var(--mist);text-align:center;margin-bottom:10px}
+  .danger{
+    display:block;margin:4px auto 0;background:transparent;
+    border:1px solid var(--line);color:var(--mist);font-size:12px;padding:8px 14px;
+  }
   .settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;font-size:13px}
   .settings label{display:flex;flex-direction:column;gap:4px;color:var(--mist)}
   .settings select,.settings input{
@@ -182,8 +191,16 @@
 <ul class="log" id="log"></ul>
 <div class="empty" id="empty">記録はまだありません</div>
 
-<details>
-  <summary>設定</summary>
+<details id="growthD">
+  <summary class="s-growth">成長記録</summary>
+  <div class="growth-sum" id="growthSum">まだデータがありません</div>
+  <canvas id="chart"></canvas>
+  <div class="chart-note">● 平均誤差(yd) — 下がるほど上達しています</div>
+  <button id="clearData" class="danger">保存データを全消去</button>
+</details>
+
+<details id="settingsD">
+  <summary class="s-gear">設定</summary>
   <div class="settings">
     <label>最短距離
       <select id="minDist">
@@ -221,6 +238,25 @@
     running:false, target:null, lastTarget:null,
     log:[], autoTimer:null
   };
+
+  /* ---------- データ保存（この端末に自動保存） ---------- */
+  const KEY = 'approach_shots_v1';
+  function loadAll(){
+    try{ return JSON.parse(localStorage.getItem(KEY)) || []; }catch(_){ return []; }
+  }
+  function saveAll(){
+    try{ localStorage.setItem(KEY, JSON.stringify(allShots)); }catch(_){}
+  }
+  const dayKey = ts => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  let allShots = loadAll();
+  // 今日の分をログに復元
+  {
+    const today = dayKey(Date.now());
+    state.log = allShots.filter(s => dayKey(s.ts) === today).sort((a,b)=>b.ts-a.ts);
+  }
 
   /* ---------- 音声読み上げ ---------- */
   let speaking = false;
@@ -354,7 +390,10 @@
   /* ---------- 記録 ---------- */
   function record(diff, carry){
     clearTimeout(state.autoTimer);
-    state.log.unshift({target:state.target, diff, carry:carry ?? null, miss:false});
+    const entry = {ts:Date.now(), target:state.target, diff, carry:carry ?? null, miss:false};
+    state.log.unshift(entry);
+    allShots.push(entry);
+    saveAll();
     render();
     const say = diff===0 ? 'ピッタリ、ナイスショット'
       : diff<0 ? `ショート${Math.abs(diff)}ヤード` : `オーバー${diff}ヤード`;
@@ -430,10 +469,104 @@
     $('stJust').textContent = shots.length? Math.round(just/shots.length*100)+'%':'0%';
     const avg = shots.length? (shots.reduce((s,e)=>s+Math.abs(e.diff),0)/shots.length):null;
     $('stAvg').textContent = avg===null? '–': avg.toFixed(1);
+    updateGrowth();
   }
+
+  /* ---------- 成長グラフ ---------- */
+  function growthData(){
+    const days = {};
+    allShots.forEach(s => { (days[dayKey(s.ts)] = days[dayKey(s.ts)] || []).push(s); });
+    return Object.keys(days).sort().map(k => {
+      const arr = days[k];
+      return {
+        day: k,
+        n: arr.length,
+        avg: arr.reduce((s,e)=>s+Math.abs(e.diff),0)/arr.length,
+        just: Math.round(arr.filter(e=>e.diff===0).length/arr.length*100)
+      };
+    });
+  }
+  function updateGrowth(){
+    const data = growthData();
+    if(data.length === 0){
+      $('growthSum').textContent = 'まだデータがありません';
+      const ctx = $('chart').getContext('2d');
+      ctx.clearRect(0,0,$('chart').width,$('chart').height);
+      return;
+    }
+    const total = allShots.length;
+    const latest = data[data.length-1];
+    const first = data[0];
+    let trend = '';
+    if(data.length >= 2){
+      const d = latest.avg - first.avg;
+      trend = d < -0.05 ? `／ 初日から <b>${Math.abs(d).toFixed(1)}yd</b> 改善` :
+              d > 0.05 ? `／ 初日から ${d.toFixed(1)}yd 悪化` : '／ 横ばい';
+    }
+    $('growthSum').innerHTML =
+      `練習 <b>${data.length}日</b>・累計 <b>${total}球</b> ${trend}<br>` +
+      `直近: 平均誤差 <b>${latest.avg.toFixed(1)}yd</b>・ピッタリ率 <b>${latest.just}%</b>`;
+    if($('growthD').open) drawChart(data);
+  }
+  function drawChart(data){
+    const cv = $('chart');
+    const dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth * dpr, H = 190 * dpr;
+    if(!cv.clientWidth) return;
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const padL = 30*dpr, padR = 14*dpr, padT = 18*dpr, padB = 26*dpr;
+    const maxY = Math.max(10, Math.ceil(Math.max(...data.map(d=>d.avg))/5)*5);
+    const x = i => data.length === 1
+      ? (padL + (W-padL-padR)/2)
+      : padL + (W-padL-padR) * i/(data.length-1);
+    const y = v => padT + (H-padT-padB) * (1 - v/maxY);
+
+    ctx.clearRect(0,0,W,H);
+    // グリッドと目盛り
+    ctx.strokeStyle = 'rgba(244,241,228,.14)';
+    ctx.fillStyle = '#8FAF9B';
+    ctx.font = `${10*dpr}px sans-serif`;
+    ctx.lineWidth = 1;
+    for(let v=0; v<=maxY; v+=5){
+      ctx.beginPath(); ctx.moveTo(padL, y(v)); ctx.lineTo(W-padR, y(v)); ctx.stroke();
+      ctx.fillText(v, 6*dpr, y(v)+3*dpr);
+    }
+    // 折れ線
+    ctx.strokeStyle = '#F2C14E';
+    ctx.lineWidth = 2.5*dpr;
+    ctx.beginPath();
+    data.forEach((d,i)=> i===0 ? ctx.moveTo(x(i),y(d.avg)) : ctx.lineTo(x(i),y(d.avg)));
+    ctx.stroke();
+    // 点と値
+    data.forEach((d,i)=>{
+      ctx.fillStyle = '#F2C14E';
+      ctx.beginPath(); ctx.arc(x(i), y(d.avg), 4*dpr, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#F4F1E4';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.avg.toFixed(1), x(i), y(d.avg)-8*dpr);
+      // 日付ラベル(間引き)
+      const step = Math.ceil(data.length/6);
+      if(i % step === 0 || i === data.length-1){
+        ctx.fillStyle = '#8FAF9B';
+        const [,m,dd] = d.day.split('-');
+        ctx.fillText(`${+m}/${+dd}`, x(i), H-8*dpr);
+      }
+      ctx.textAlign = 'left';
+    });
+  }
+  $('growthD').addEventListener('toggle', ()=>{ if($('growthD').open) updateGrowth(); });
+  window.addEventListener('resize', ()=>{ if($('growthD').open) updateGrowth(); });
+  $('clearData').addEventListener('click', ()=>{
+    if(!confirm('保存された全ての練習データを削除します。よろしいですか？')) return;
+    allShots = []; state.log = []; saveAll(); render();
+  });
   $('log').addEventListener('click',e=>{
     const b=e.target.closest('.del'); if(!b) return;
-    state.log.splice(+b.dataset.i,1); render();
+    const removed = state.log.splice(+b.dataset.i,1)[0];
+    const gi = allShots.indexOf(removed);
+    if(gi >= 0){ allShots.splice(gi,1); saveAll(); }
+    render();
   });
 
   /* ---------- イベント ---------- */
@@ -452,6 +585,9 @@
       $('rangeLabel').textContent = `${min}–${max}yd`;
     });
   });
+  // 起動時: 保存済みの今日の記録を表示
+  render();
+  if(state.log.length) $('stats').style.display='flex';
 })();
 </script>
 </body>
