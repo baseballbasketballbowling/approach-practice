@@ -2,8 +2,14 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>アプローチ練習 — 距離打ち分け</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#10301F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="アプローチ">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <style>
   :root{
     --turf:#10301F;
@@ -26,7 +32,7 @@
     min-height:100dvh;
     display:flex;flex-direction:column;
     max-width:520px;margin:0 auto;
-    padding:14px 16px calc(18px + env(safe-area-inset-bottom));
+    padding:calc(14px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
   }
   header{
     display:flex;align-items:baseline;justify-content:space-between;
@@ -669,6 +675,11 @@
   // 起動時: 保存済みの今日の記録を表示
   render();
   if(state.log.length) $('stats').style.display='flex';
+
+  // オフライン対応（ホーム画面アプリ用）
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
 })();
 </script>
 </body>
