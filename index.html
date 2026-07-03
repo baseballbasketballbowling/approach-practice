@@ -137,7 +137,7 @@
   .dist-title{font-size:13px;color:var(--mist);margin:14px 0 6px}
   .dist-stats{font-size:13px;margin-bottom:6px}
   .dist-head,.dist-row{
-    display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr;
+    display:grid;grid-template-columns:1fr .8fr 1.2fr 1.1fr .7fr;
     padding:7px 2px;text-align:center;
   }
   .dist-head{color:var(--mist);font-size:11px;border-bottom:1px solid var(--line)}
@@ -419,8 +419,13 @@
   }
   function recordMiss(){
     clearTimeout(state.autoTimer);
-    setStatus('ミス — 同じ距離でもう一度', 'ok');
-    speak(`ミス。もう一度、${state.target}ヤード`);
+    const entry = {ts:Date.now(), target:state.target, diff:null, carry:null, miss:true};
+    state.log.unshift(entry);
+    allShots.push(entry);
+    saveAll();
+    render();
+    setStatus(`記録：${state.target}yd → ミス。同じ距離でもう一度`, 'ok');
+    speak(`ミス、記録しました。もう一度、${state.target}ヤード`);
   }
   function scheduleNext(){
     const wait = parseInt($('autoNext').value,10);
@@ -475,17 +480,19 @@
     state.log.forEach((e,i)=>{ (groups[e.target] = groups[e.target] || []).push({...e, _i:i}); });
     Object.keys(groups).map(Number).sort((a,b)=>a-b).forEach(dist=>{
       const arr = groups[dist];
-      const avg = arr.length? (arr.reduce((s,e)=>s+Math.abs(e.diff),0)/arr.length).toFixed(1) : '–';
+      const valid = arr.filter(e=>!e.miss);
+      const avg = valid.length? (valid.reduce((s,e)=>s+Math.abs(e.diff),0)/valid.length).toFixed(1) : '–';
+      const missN = arr.length - valid.length;
       const head = document.createElement('li');
       head.className = 'log-group';
-      head.innerHTML = `<span>${dist}yd</span><span class="gc">${arr.length}球・平均${avg}yd</span>`;
+      head.innerHTML = `<span>${dist}yd</span><span class="gc">${valid.length}球${missN?`・ミス${missN}`:''}・平均${avg}yd</span>`;
       logEl.appendChild(head);
       arr.forEach(e=>{
         const li=document.createElement('li');
-        const cls = e.diff===0?'just':(e.diff<0?'short':'over');
+        const cls = e.miss?'miss':(e.diff===0?'just':(e.diff<0?'short':'over'));
         li.innerHTML =
           `<span class="t">${e.carry!==null? e.carry+'yd':'—'}</span>`+
-          `<span class="d ${cls}">${fmtDiff(e.diff)}</span>`+
+          `<span class="d ${cls}">${e.miss?'ミス':fmtDiff(e.diff)}</span>`+
           `<button class="del" data-i="${e._i}">削除</button>`;
         logEl.appendChild(li);
       });
@@ -501,7 +508,7 @@
   /* ---------- 成長グラフ ---------- */
   function growthData(){
     const days = {};
-    allShots.forEach(s => { (days[dayKey(s.ts)] = days[dayKey(s.ts)] || []).push(s); });
+    allShots.filter(s=>!s.miss).forEach(s => { (days[dayKey(s.ts)] = days[dayKey(s.ts)] || []).push(s); });
     return Object.keys(days).sort().map(k => {
       const arr = days[k];
       return {
@@ -521,7 +528,7 @@
       $('distStats').innerHTML = '';
       return;
     }
-    const total = allShots.length;
+    const total = allShots.filter(s=>!s.miss).length;
     const latest = data[data.length-1];
     const first = data[0];
     let trend = '';
@@ -541,11 +548,13 @@
     allShots.forEach(s => { (byDist[s.target] = byDist[s.target] || []).push(s); });
     return Object.keys(byDist).map(Number).sort((a,b)=>a-b).map(dist=>{
       const arr = byDist[dist];
+      const valid = arr.filter(e=>!e.miss);
       return {
         dist,
-        n: arr.length,
-        avg: arr.reduce((s,e)=>s+Math.abs(e.diff),0)/arr.length,
-        just: Math.round(arr.filter(e=>e.diff===0).length/arr.length*100)
+        n: valid.length,
+        miss: arr.length - valid.length,
+        avg: valid.length? valid.reduce((s,e)=>s+Math.abs(e.diff),0)/valid.length : null,
+        just: valid.length? Math.round(valid.filter(e=>e.diff===0).length/valid.length*100) : null
       };
     });
   }
@@ -554,9 +563,9 @@
     const data = distanceStats();
     if(!data.length){ el.innerHTML=''; return; }
     el.innerHTML =
-      '<div class="dist-head"><span>距離</span><span>球数</span><span>平均誤差</span><span>ピッタリ率</span></div>' +
+      '<div class="dist-head"><span>距離</span><span>球数</span><span>平均誤差</span><span>ピッタリ率</span><span>ミス</span></div>' +
       data.map(d =>
-        `<div class="dist-row"><span>${d.dist}yd</span><span>${d.n}</span><span>${d.avg.toFixed(1)}yd</span><span>${d.just}%</span></div>`
+        `<div class="dist-row"><span>${d.dist}yd</span><span>${d.n}</span><span>${d.avg===null?'–':d.avg.toFixed(1)+'yd'}</span><span>${d.just===null?'–':d.just+'%'}</span><span>${d.miss||'–'}</span></div>`
       ).join('');
   }
   function drawChart(data){
