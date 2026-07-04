@@ -284,6 +284,19 @@
     state.log = allShots.filter(s => dayKey(s.ts) === today).sort((a,b)=>b.ts-a.ts);
   }
 
+  /* ---------- ネイティブアプリ連携（iOSアプリ版のみ動作） ---------- */
+  const nativePlugins = () =>
+    (window.Capacitor && window.Capacitor.isNativePlatform()) ? window.Capacitor.Plugins : null;
+  function buzz(kind){
+    const p = nativePlugins();
+    if(!p || !p.Haptics) return;
+    try{
+      if(kind === 'ok') p.Haptics.notification({type:'SUCCESS'});
+      else if(kind === 'miss') p.Haptics.notification({type:'WARNING'});
+      else p.Haptics.impact({style:'MEDIUM'});
+    }catch(_){}
+  }
+
   /* ---------- 音声読み上げ ---------- */
   let speaking = false;
   function speak(text, cb){
@@ -421,6 +434,7 @@
     allShots.push(entry);
     saveAll();
     render();
+    buzz('ok');
     const say = diff===0 ? 'ピッタリ、ナイスショット'
       : diff<0 ? `ショート${Math.abs(diff)}ヤード` : `オーバー${diff}ヤード`;
     setStatus(`記録：${state.target}yd → ${fmtDiff(diff)}`, 'ok');
@@ -434,6 +448,7 @@
     allShots.push(entry);
     saveAll();
     render();
+    buzz('miss');
     setStatus(`記録：${state.target}yd → ミス。同じ距離でもう一度`, 'ok');
     speak(`ミス、記録しました。もう一度、${state.target}ヤード`);
   }
@@ -470,6 +485,7 @@
     $('stats').style.display='flex';
 
     setStatus('打ったら結果を記録してください');
+    buzz();
     speak(`次は、${state.target}ヤード`);
   }
 

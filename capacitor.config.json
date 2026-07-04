@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.baseballbasketballbowling.approach",
+  "appName": "アプローチ練習",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "automatic"
+  }
+}
