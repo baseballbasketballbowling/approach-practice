@@ -32,7 +32,7 @@
     min-height:100dvh;
     display:flex;flex-direction:column;
     max-width:520px;margin:0 auto;
-    padding:calc(14px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+    padding:calc(14px + env(safe-area-inset-top)) 16px calc(74px + env(safe-area-inset-bottom));
   }
   header{
     display:flex;align-items:baseline;justify-content:space-between;
@@ -78,7 +78,7 @@
     margin:22px 0 6px;
   }
   .status.listening{color:var(--flag);font-weight:700}
-  .status.ok{color:#8FD6A8;font-weight:700}
+  .status.ok{color:#8FD6A8;font-weight:700;font-size:16px}
 
   /* ---- 操作 ---- */
   .controls{display:flex;flex-direction:column;gap:10px;margin-top:8px}
@@ -114,7 +114,7 @@
   .stats div+div{border-left:1px solid var(--line)}
   .stats b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
   .stats span{font-size:11px;color:var(--mist)}
-  .log{margin-top:14px;list-style:none;max-height:200px;overflow-y:auto}
+  .log{margin-top:14px;list-style:none}
   .log li{
     display:flex;justify-content:space-between;align-items:center;
     padding:9px 4px;border-bottom:1px dashed var(--line);
@@ -162,6 +162,30 @@
   }
   .toggle{grid-column:1/-1;flex-direction:row!important;align-items:center;gap:8px!important}
   .toggle input{width:20px;height:20px}
+  /* ---- タブ ---- */
+  .view{display:none}
+  .view.active{display:block}
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:10;
+    max-width:520px;margin:0 auto;
+    display:flex;
+    background:rgba(13,38,25,.96);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabbar button{
+    flex:1;background:none;border-radius:0;color:var(--mist);
+    font-size:11px;font-weight:700;padding:8px 0 7px;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .tabbar button .ico{font-size:21px;line-height:1}
+  .tabbar button.active{color:var(--board)}
+  .mini-sum{
+    text-align:center;font-size:13px;color:var(--mist);
+    margin-top:18px;font-variant-numeric:tabular-nums;
+  }
+  .view-title{font-size:14px;font-weight:700;color:var(--mist);margin:14px 0 4px}
   @media (prefers-reduced-motion:reduce){
     .board.pop{animation:none}.btn-mic.rec{animation:none}
   }
@@ -173,6 +197,8 @@
   <h1>アプローチ練習</h1>
   <div class="range" id="rangeLabel">50–100yd</div>
 </header>
+
+<main id="viewPractice" class="view active">
 
 <div class="board-wrap">
   <div class="board" id="board">
@@ -203,6 +229,12 @@
   </div>
 </div>
 
+<div class="mini-sum" id="miniSum"></div>
+
+</main>
+
+<main id="viewRecords" class="view">
+
 <div class="stats" id="stats" style="display:none">
   <div><b id="stCount">0</b><span>球数</span></div>
   <div><b id="stJust">0%</b><span>ピッタリ率</span></div>
@@ -212,7 +244,7 @@
 <ul class="log" id="log"></ul>
 <div class="empty" id="empty">記録はまだありません</div>
 
-<details id="growthD">
+<details id="growthD" open>
   <summary class="s-growth">成長記録</summary>
   <div class="growth-sum" id="growthSum">まだデータがありません</div>
   <canvas id="chart"></canvas>
@@ -225,8 +257,10 @@
   </div>
 </details>
 
-<details id="settingsD">
-  <summary class="s-gear">設定</summary>
+</main>
+
+<main id="viewSettings" class="view">
+  <div class="view-title">⚙ 設定</div>
   <div class="settings">
     <label>最短距離
       <select id="minDist">
@@ -261,7 +295,13 @@
     </label>
     <label class="toggle"><input type="checkbox" id="voiceOn" checked> 音声読み上げを使う</label>
   </div>
-</details>
+</main>
+
+<nav class="tabbar">
+  <button class="active" data-view="viewPractice"><span class="ico">⛳</span>練習</button>
+  <button data-view="viewRecords"><span class="ico">📊</span>記録</button>
+  <button data-view="viewSettings"><span class="ico">⚙️</span>設定</button>
+</nav>
 
 <script>
 (() => {
@@ -564,6 +604,9 @@
     $('stJust').textContent = shots.length? Math.round(just/shots.length*100)+'%':'0%';
     const avg = shots.length? (shots.reduce((s,e)=>s+Math.abs(e.diff),0)/shots.length):null;
     $('stAvg').textContent = avg===null? '–': avg.toFixed(1);
+    $('miniSum').textContent = shots.length
+      ? `今日 ${shots.length}球 ・ ピッタリ${Math.round(just/shots.length*100)}% ・ 平均誤差${avg.toFixed(1)}yd`
+      : '';
     updateGrowth();
   }
 
@@ -709,6 +752,13 @@
   });
 
   /* ---------- イベント ---------- */
+  document.querySelector('.tabbar').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('active', x===b));
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id===b.dataset.view));
+    // 非表示中はグラフが描画できないため、記録タブを開いたときに描き直す
+    if(b.dataset.view === 'viewRecords') updateGrowth();
+  });
   $('mainBtn').addEventListener('click', nextTarget);
   $('micBtn').addEventListener('click', toggleHandsfree);
   $('quickRow').addEventListener('click', e=>{
