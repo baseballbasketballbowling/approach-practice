@@ -248,9 +248,15 @@
     </label>
     <label>記録後の自動読み上げ
       <select id="autoNext">
+        <option value="1">1秒後</option>
         <option value="3" selected>3秒後</option>
         <option value="5">5秒後</option>
         <option value="0">手動（次へを押す）</option>
+      </select>
+    </label>
+    <label>読み上げの声
+      <select id="voiceSel">
+        <option value="">自動（高品質を優先）</option>
       </select>
     </label>
     <label class="toggle"><input type="checkbox" id="voiceOn" checked> 音声読み上げを使う</label>
@@ -299,6 +305,33 @@
 
   /* ---------- 音声読み上げ ---------- */
   let speaking = false;
+  function jaVoices(){
+    if(!('speechSynthesis' in window)) return [];
+    return speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('ja'));
+  }
+  // 低品質（compact）を避け、拡張/プレミアム音声を優先する
+  function voiceScore(v){
+    const s = (v.name + ' ' + v.voiceURI).toLowerCase();
+    let sc = 0;
+    if(/premium/.test(s)) sc += 4;
+    if(/enhanced|拡張/.test(s)) sc += 3;
+    if(/google|siri/.test(s)) sc += 2;
+    if(/compact/.test(s)) sc -= 2;
+    return sc;
+  }
+  function currentVoice(){
+    const arr = jaVoices();
+    if(!arr.length) return null;
+    const picked = arr.find(v => v.voiceURI === $('voiceSel').value);
+    return picked || arr.slice().sort((a,b) => voiceScore(b)-voiceScore(a))[0];
+  }
+  function populateVoices(){
+    const sel = $('voiceSel');
+    const saved = sel.value || savedVoiceURI;
+    sel.innerHTML = '<option value="">自動（高品質を優先）</option>' +
+      jaVoices().map(v => `<option value="${v.voiceURI}">${v.name}</option>`).join('');
+    if([...sel.options].some(o => o.value === saved)) sel.value = saved;
+  }
   function speak(text, cb){
     if(!$('voiceOn').checked || !('speechSynthesis' in window)){ if(cb) cb(); return; }
     speechSynthesis.cancel();
@@ -306,7 +339,7 @@
     speaking = true;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP'; u.rate = 1.0;
-    const v = speechSynthesis.getVoices().find(v=>v.lang.startsWith('ja'));
+    const v = currentVoice();
     if(v) u.voice = v;
     u.onend = u.onerror = () => {
       speaking = false;
@@ -315,7 +348,10 @@
     };
     speechSynthesis.speak(u);
   }
-  if('speechSynthesis' in window) speechSynthesis.getVoices();
+  if('speechSynthesis' in window){
+    speechSynthesis.getVoices();
+    speechSynthesis.addEventListener('voiceschanged', populateVoices);
+  }
 
   /* ---------- 音声認識（常時オン / ハンズフリー） ---------- */
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -686,9 +722,39 @@
       let min=+$('minDist').value, max=+$('maxDist').value;
       if(min>=max){ $('maxDist').value = Math.max(min+10, 70); max=+$('maxDist').value; }
       $('rangeLabel').textContent = `${min}–${max}yd`;
+      saveSettings();
     });
   });
-  // 起動時: 保存済みの今日の記録を表示
+  ['autoNext','voiceSel','voiceOn'].forEach(id=>{
+    $(id).addEventListener('change', saveSettings);
+  });
+
+  /* ---------- 設定の保存・復元 ---------- */
+  const SKEY = 'approach_settings_v1';
+  function saveSettings(){
+    try{
+      localStorage.setItem(SKEY, JSON.stringify({
+        min:$('minDist').value, max:$('maxDist').value, step:$('step').value,
+        autoNext:$('autoNext').value, voice:$('voiceSel').value, voiceOn:$('voiceOn').checked
+      }));
+    }catch(_){}
+  }
+  let savedVoiceURI = '';
+  (function loadSettings(){
+    let s; try{ s = JSON.parse(localStorage.getItem(SKEY)); }catch(_){}
+    if(!s) return;
+    const setSel = (id,val) => {
+      if(val != null && [...$(id).options].some(o=>o.value===String(val))) $(id).value = val;
+    };
+    setSel('minDist', s.min); setSel('maxDist', s.max); setSel('step', s.step);
+    setSel('autoNext', s.autoNext);
+    if(typeof s.voiceOn === 'boolean') $('voiceOn').checked = s.voiceOn;
+    savedVoiceURI = s.voice || '';
+    $('rangeLabel').textContent = `${$('minDist').value}–${$('maxDist').value}yd`;
+  })();
+
+  // 起動時: 音声リストと保存済みの今日の記録を表示
+  populateVoices();
   render();
   if(state.log.length) $('stats').style.display='flex';
 
