@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d0c">
+<title>BJ ボイス戦略</title>
+<style>
+:root{--bg:#0a0d0c;--panel:#121816;--panel2:#1a221e;--line:#27332d;--text:#e6ece8;--muted:#8b998f;--H:#eaa93a;--S:#4fc47f;--D:#4f9ff0;--P:#b98bf0;--R:#ef6f5e;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  padding:calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 28px) calc(env(safe-area-inset-left) + 12px);
+  max-width:560px;margin:0 auto;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:12px;cursor:pointer;touch-action:manipulation}
+button:active{filter:brightness(1.4)}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 2px 8px}
+.top h1{font-size:14px;margin:0;font-weight:600;color:var(--muted);letter-spacing:.05em;white-space:nowrap}
+#rulesum{font-size:11px;color:var(--muted);text-align:right}
+#advice{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 12px 10px;text-align:center;min-height:146px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+#action{font-size:58px;font-weight:800;line-height:1.05;letter-spacing:.02em;color:var(--muted)}
+#advice.a-H{border-color:#6b5226;background:#1d1a12}#advice.a-H #action{color:var(--H)}
+#advice.a-S,#advice.a-BJ{border-color:#2c5a40;background:#111d17}#advice.a-S #action,#advice.a-BJ #action{color:var(--S)}
+#advice.a-D{border-color:#2b4b6f;background:#10171f}#advice.a-D #action{color:var(--D)}
+#advice.a-P{border-color:#51406c;background:#18141f}#advice.a-P #action{color:var(--P)}
+#advice.a-R,#advice.a-BUST{border-color:#6d3029;background:#1f1311}#advice.a-R #action,#advice.a-BUST #action{color:var(--R)}
+#hand{font-size:18px;font-variant-numeric:tabular-nums}
+#sub{font-size:13px;color:var(--muted);min-height:1.2em}
+#note{font-size:13px;color:var(--H)}
+#mic{width:100%;height:62px;margin:10px 0 4px;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px}
+#mic .dot{width:12px;height:12px;border-radius:50%;background:#56635b;flex-shrink:0}
+#mic.on{background:#132519;border-color:var(--S);color:#d9f6e5}
+#mic.on .dot{background:var(--S);animation:pulse 1.4s ease-in-out infinite}
+#mic.wait .dot{background:var(--H);animation:none}
+#mic.speak{background:#141d2a;border-color:var(--D);color:#cfe3ff}
+#mic.speak .dot{background:var(--D);animation:none}
+#mic:disabled{opacity:.6}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+#heard{font-size:12px;color:var(--muted);margin:0 2px 10px;min-height:1.2em;word-break:break-all}
+.tg{display:flex;align-items:center;gap:8px;margin:4px 0 8px}
+#tDealer{padding:9px 12px;font-size:13px}
+#tDealer.on{background:#1c2b40;border-color:var(--D);color:#cfe3ff}
+#next{font-size:12px;color:var(--muted);margin-left:auto;text-align:right}
+.keys{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.keys button{height:60px;font-size:24px;font-weight:700;line-height:1}
+.keys button small{display:block;font-size:10px;font-weight:500;color:var(--muted);margin-top:3px}
+.ctrl{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.ctrl button{height:50px;font-size:14px;font-weight:600}
+details{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:2px 12px}
+summary{padding:11px 0;font-size:14px;font-weight:600;cursor:pointer}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.segs{display:flex;gap:4px;flex-shrink:0}
+.segs button{padding:8px 10px;font-size:13px;border-radius:10px}
+.segs button.on{background:#244232;border-color:var(--S);color:#d9f6e5}
+#bTest{width:100%;padding:12px;margin:6px 0 12px;font-size:14px}
+.help{font-size:13px;line-height:1.75;color:#c9d3cd;padding-bottom:12px}
+.help ul{margin:0;padding-left:1.1em}
+.help b{color:var(--text)}
+.help .k{background:#0f1412;border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap}
+.legend{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:6px}
+table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:12px;margin:2px 0 12px;font-variant-numeric:tabular-nums}
+table tr>th:first-child{width:46px}
+th,td{text-align:center;padding:4px 0;border:1px solid var(--bg)}
+th{color:var(--muted);font-weight:600}
+th.grp{text-align:left;padding:8px 0 3px;color:var(--text);border:none}
+td.c-H{background:#3a2c12;color:#f4c56b}td.c-S{background:#163222;color:#7fe0a6}td.c-D{background:#142a43;color:#8cc3ff}
+td.c-P{background:#2b2042;color:#d2b3ff}td.c-R{background:#43201b;color:#ff9c8f}
+</style>
+</head>
+<body>
+<div class="top"><h1>BJ ボイス戦略</h1><div id="rulesum"></div></div>
+
+<div id="advice"><div id="action">—</div><div id="hand"></div><div id="sub"></div><div id="note"></div></div>
+
+<button id="mic"><span class="dot"></span><span id="micText">🎤 タップで聞き取り開始</span></button>
+<div id="heard"></div>
+
+<div class="tg"><button id="tDealer">次の1枚をディーラーに</button><span id="next"></span></div>
+<div class="keys" id="keys"></div>
+<div class="ctrl">
+  <button id="bUndo">取り消し</button><button id="bSplit">スプリット</button><button id="bRepeat">もう一回</button><button id="bNew">次のハンド</button>
+</div>
+
+<details id="set"><summary>ルール設定</summary>
+  <div class="row"><span>サレンダー</span><div class="segs" data-key="surrender"><button data-v="true">あり</button><button data-v="false">なし</button></div></div>
+  <div class="row"><span>ディーラーのソフト17</span><div class="segs" data-key="h17"><button data-v="false">スタンド</button><button data-v="true">ヒット</button></div></div>
+  <div class="row"><span>スプリット後のダブル</span><div class="segs" data-key="das"><button data-v="true">あり</button><button data-v="false">なし</button></div></div>
+  <div class="row"><span>読み上げ内容</span><div class="segs" data-key="echo"><button data-v="true">札＋指示</button><button data-v="false">指示だけ</button></div></div>
+  <div class="row"><span>読み上げ速度</span><div class="segs" data-key="rate"><button data-v="1">標準</button><button data-v="1.2">速め</button><button data-v="1.45">最速</button></div></div>
+  <button id="bTest">イヤホン音声テスト</button>
+</details>
+
+<details><summary>使い方・話し方</summary><div class="help"><ul>
+  <li><b>🎤ボタンを1回押すと、止めるまでずっと聞き取り</b>。読み上げ中はマイクを止めるので自分のイヤホンの声は拾いません。</li>
+  <li>Safariで開く。マイクの確認が出たら「許可」。画面はスリープしないようにしてあります（画面を消すと聞き取りも止まります）。</li>
+  <li>順番は<b>自分の2枚 → ディーラー</b>。例 <span class="k">10 6 ディーラー 6</span> <span class="k">テン ロク 対 ロク</span></li>
+  <li><b>ディーラー／対</b>の直後の1枚がディーラー、<b>自分</b>の後は自分の札。<span class="k">ディーラー エース 自分 9 7</span> もOK</li>
+  <li>合計で言ってもOK：<span class="k">16 対 6</span>（ハード扱い）／<span class="k">ソフト18 対 9</span></li>
+  <li>ペアは <span class="k">8 8</span> か <span class="k">8のペア</span>、ソフトは <span class="k">エース 7</span></li>
+  <li>ヒット後は<b>引いた札だけ</b>：<span class="k">5</span></li>
+  <li>スタンド／ダブル後に札を言うと<b>自動で次のハンド</b>。3枚まとめて言っても新ハンド。<span class="k">次</span>でもリセット。</li>
+  <li>ディーラーの札だけ言い直すと訂正：<span class="k">ディーラー 10</span></li>
+  <li>スプリット指示の後は1手目の2枚目を言うだけ。1手目が終わったら次の札で2手目へ。</li>
+  <li><span class="k">取り消し</span> <span class="k">もう一回</span> <span class="k">スプリット</span></li>
+  <li>絵札は「テン」「キング」等、エースは「エース」と言うと誤認識しにくい。</li>
+  <li>4〜8デッキ用の基本戦略です。インシュランス（保険）は常に断るのが基本戦略。</li>
+</ul></div></details>
+
+<details id="chartBox"><summary>戦略表（今のルール）</summary>
+  <div class="legend">H ヒット／S スタンド／D ダブル（不可ならヒット）／Ds ダブル（不可ならスタンド）／P スプリット／R サレンダー</div>
+  <div id="chart"></div>
+</details>
+
+<script>
+/*LOGIC-START*/
+const BJ = (() => {
+  const ACT = {H:'ヒット',S:'スタンド',D:'ダブル',P:'スプリット',R:'サレンダー',BJ:'ブラックジャック',BUST:'バースト'};
+  const TERMINAL = new Set(['S','R','BJ','BUST','DONE']);
+
+  function handInfo(cards){
+    let sum=0, aces=0;
+    for(const c of cards){ if(c===11){sum+=1;aces++;} else sum+=c; }
+    let soft=false;
+    if(aces && sum+10<=21){ sum+=10; soft=true; }
+    return {total:sum, soft};
+  }
+
+  // cards: 2-10, 11=A. up: dealer upcard 2-10, 11=A. Multi-deck (4-8) basic strategy.
+  function decide(cards, up, r, splitMode){
+    const n=cards.length;
+    const {total, soft} = handInfo(cards);
+    const pair = n===2 && cards[0]===cards[1];
+    const base = {total, soft, pair};
+    const out = (code, raw) => Object.assign({}, base, {code, raw: raw||code});
+    if(total>21) return out('BUST');
+    if(n===2 && total===21 && !splitMode) return out('BJ');
+    if(total===21) return out('S');
+    const canDouble = n===2 && (!splitMode || r.das);
+    const canSur = n===2 && !splitMode && r.surrender;
+    const fin = raw => {
+      let code = raw;
+      if(raw==='D') code = canDouble ? 'D' : 'H';
+      else if(raw==='Ds') code = canDouble ? 'D' : 'S';
+      return out(code, raw);
+    };
+    if(canSur){
+      if(pair){
+        if(cards[0]===8 && r.h17 && up===11) return out('R');
+      } else if(!soft){
+        if(total===16 && up>=9) return out('R');
+        if(total===15 && (up===10 || (r.h17 && up===11))) return out('R');
+        if(total===17 && r.h17 && up===11) return out('R');
+      }
+    }
+    if(pair){
+      const v=cards[0]; let sp=false;
+      switch(v){
+        case 11: case 8: sp=true; break;
+        case 9: sp = up<=6 || up===8 || up===9; break;
+        case 7: sp = up<=7; break;
+        case 6: sp = r.das ? up<=6 : (up>=3 && up<=6); break;
+        case 4: sp = !!r.das && (up===5 || up===6); break;
+        case 3: case 2: sp = r.das ? up<=7 : (up>=4 && up<=7); break;
+      }
+      if(sp) return out('P');
+    }
+    if(soft){
+      if(total>=20) return fin('S');
+      if(total===19) return fin(r.h17 && up===6 ? 'Ds' : 'S');
+      if(total===18){
+        if(up>=9) return fin('H');
+        if(up>=7) return fin('S');
+        if(up>=3) return fin('Ds');
+        return fin(r.h17 ? 'Ds' : 'S');
+      }
+      if(total===17) return fin(up>=3 && up<=6 ? 'D' : 'H');
+      if(total>=15) return fin(up>=4 && up<=6 ? 'D' : 'H');
+      if(total>=13) return fin(up>=5 && up<=6 ? 'D' : 'H');
+      return fin('H');
+    }
+    if(total>=17) return fin('S');
+    if(total>=13) return fin(up<=6 ? 'S' : 'H');
+    if(total===12) return fin(up>=4 && up<=6 ? 'S' : 'H');
+    if(total===11) return fin(up===11 && !r.h17 ? 'H' : 'D');
+    if(total===10) return fin(up<=9 ? 'D' : 'H');
+    if(total===9) return fin(up>=3 && up<=6 ? 'D' : 'H');
+    return fin('H');
+  }
+
+  // ---------- speech text -> tokens ----------
+  const DK = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  function kanjiNum(k){
+    const i = k.indexOf('十');
+    if(i>=0){
+      const l=k.slice(0,i), r=k.slice(i+1).replace(/十/g,'');
+      const tens = l ? (DK[l[l.length-1]]||1) : 1;
+      const ones = r ? (DK[r[0]]||0) : 0;
+      return String(tens*10+ones);
+    }
+    return k.split('').map(c=>DK[c]).join('');
+  }
+  // a digit string from dictation -> cards. 2-digit 11..21 are read as hand totals.
+  function numCards(str){
+    str = str.replace(/^0+(?=\d)/,'');
+    const n = parseInt(str,10);
+    if(str.length<=2){
+      if(n===0) return [];
+      if(n===1) return [11];
+      if(n>=2 && n<=10) return [n];
+      if(n===11) return [2,9];
+      if(n>=12 && n<=19) return [10, n-10];
+      if(n===20) return [10,10];
+      if(n===21) return [10,11];
+      if(n%10===0) return [n/10, 10];
+    }
+    const out=[];
+    for(let i=0;i<str.length;i++){
+      const ch=str[i];
+      if(ch==='1'){
+        if(str[i+1]==='0'){ out.push(10); i++; }
+        else if(i+1<str.length) out.push(10);
+        else out.push(11);
+      } else if(ch==='0'){
+        const p=out[out.length-1];
+        if(p>=2 && p<=9) out.push(10);
+      } else out.push(+ch);
+    }
+    return out;
+  }
+  const PATS = [
+    ['soft',   /(?:ソフト|そふと|soft)\s*([0-9]{1,2}|[一二三四五六七八九十]+)/iy],
+    ['repeat', /(?:もう一回|もう一度|もう1回|もう1度|もういっかい|もういちど|リピート|repeat|again)/iy],
+    ['new',    /(?:次|つぎ|ネクスト|next|リセット|reset|新しい|あたらしい|new)/iy],
+    ['undo',   /(?:取り消|とりけし|取消|戻る|戻って|戻して|もどる|もどして|undo|キャンセル|cancel|間違|まちが)/iy],
+    ['split',  /(?:スプリット|すぷりっと|split|分けて|わけて|分ける|わける)/iy],
+    ['pair',   /(?:ペア|ぺあ|pair)/iy],
+    ['dealer', /(?:ディーラー|でぃーらー|ディラー|dealer|親|相手|向こう|対|たい|vs\.?|versus|バーサス|ばーさす)(?:さん)?/iy],
+    ['player', /(?:自分|じぶん|俺|おれ|僕|ぼく|私|わたし|プレイヤー|プレーヤー|player|手札|てふだ)/iy],
+    ['skip',   /(?:ハード|はーど|hard|合計|ごうけい)/iy],
+    ['c11',    /(?:エース|えーす|エイス|ace|いち|イチ)/iy],
+    ['c10',    /(?:テン|てん|ten|じゅう|ジュウ|ジャック|じゃっく|jack|クイーン|クィーン|くいーん|queen|キング|きんぐ|king|絵札|えふだ)/iy],
+    ['c9',     /(?:ナイン|ないん|nine|きゅう|キュウ)/iy],
+    ['c8',     /(?:エイト|えいと|eight|はち|ハチ)/iy],
+    ['c7',     /(?:セブン|せぶん|seven|なな|ナナ|しち|シチ)/iy],
+    ['c6',     /(?:シックス|しっくす|six|ろく|ロク)/iy],
+    ['c5',     /(?:ファイブ|ふぁいぶ|five)/iy],
+    ['c4',     /(?:フォー|ふぉー|four|よん|ヨン)/iy],
+    ['c3',     /(?:スリー|すりー|three|さん|サン)/iy],
+    ['c2',     /(?:ツー|つー|two)/iy],
+    ['num',    /[0-9]+/y],
+    ['kan',    /[一二三四五六七八九十]+/y],
+  ];
+  function tokenize(raw){
+    let s = String(raw||'').normalize('NFKC');
+    s = s.replace(/(^|[^A-Za-z])([AJQK])(?![A-Za-z])/g, (m,p,l)=> p + (l==='A' ? ' エース ' : ' テン '));
+    const out=[]; let i=0;
+    outer: while(i<s.length){
+      for(const [name, re] of PATS){
+        re.lastIndex=i;
+        const m=re.exec(s);
+        if(m && m[0].length){
+          i += m[0].length;
+          if(name==='skip'){}
+          else if(name==='soft'){
+            const n = parseInt(/[0-9]/.test(m[1]) ? m[1] : kanjiNum(m[1]), 10);
+            if(n===12){ out.push({t:'card',v:11},{t:'card',v:11}); }
+            else if(n>=13 && n<=21){ out.push({t:'card',v:11},{t:'card',v:n-11}); }
+          }
+          else if(name==='num') numCards(m[0]).forEach(v=>out.push({t:'card',v}));
+          else if(name==='kan') numCards(kanjiNum(m[0])).forEach(v=>out.push({t:'card',v}));
+          else if(/^c\d+$/.test(name)) out.push({t:'card', v:parseInt(name.slice(1),10)});
+          else out.push({t:name});
+          continue outer;
+        }
+      }
+      i++;
+    }
+    return out;
+  }
+
+  // ---------- hand state ----------
+  const fresh = () => ({dealer:null, player:[], splitMode:false, splitCard:null, pending:0, handNo:0, last:null});
+  let state = fresh();
+  const hist = [];
+  function pushHist(){ hist.push(JSON.stringify(state)); if(hist.length>80) hist.shift(); }
+  function undo(){ if(!hist.length) return false; state = JSON.parse(hist.pop()); return true; }
+  function resetHand(){ state = fresh(); }
+  function inProgress(){ return state.dealer!=null && state.player.length>=2; }
+  function startSplit(){
+    const pc = state.player[0];
+    if(!state.splitMode){ state.splitMode=true; state.pending=1; state.handNo=1; }
+    else state.pending++;
+    state.splitCard=pc; state.player=[pc]; state.last=null;
+  }
+  function nextSplitHand(){ state.pending--; state.player=[state.splitCard]; state.last=null; state.handNo++; }
+  function splitCmd(){
+    const p=state.player;
+    if(p.length===2 && p[0]===p[1] && state.last!=='DONE'){ startSplit(); return `スプリット。${state.handNo}つ目の手の札を`; }
+    if(state.splitMode && state.pending>0){ nextSplitHand(); return `${state.handNo}つ目の手`; }
+    return 'ペアではありません';
+  }
+  function placeCard(c, target){
+    if(target==='dealer'){
+      if(TERMINAL.has(state.last) || state.last==='D') resetHand();
+      state.dealer=c; return;
+    }
+    if(state.last==='D'){ state.player.push(c); state.last='DONE'; return; }
+    if(TERMINAL.has(state.last)){
+      if(state.pending>0) nextSplitHand(); else resetHand();
+    } else if(state.last==='P'){
+      startSplit();
+    }
+    if(target==='player'){ state.player.push(c); return; }
+    if(state.player.length<2) state.player.push(c);
+    else if(state.dealer==null) state.dealer=c;
+    else state.player.push(c);
+  }
+  function applyTokens(tokens){
+    let target='auto', dealerOnce=false, pairNext=false, last=null, items=[];
+    const cmd={new:false, undo:false, repeat:false, split:false};
+    const dup = it => { it.paired=true; const d={card:it.card, target:it.target, paired:true}; items.push(d); return d; };
+    for(const tk of tokens){
+      if(tk.t==='new'){ cmd.new=true; items=[]; target='auto'; dealerOnce=false; pairNext=false; last=null; }
+      else if(tk.t==='undo') cmd.undo=true;
+      else if(tk.t==='repeat') cmd.repeat=true;
+      else if(tk.t==='split') cmd.split=true;
+      else if(tk.t==='dealer') dealerOnce=true;
+      else if(tk.t==='player'){ target='player'; dealerOnce=false; }
+      else if(tk.t==='pair'){
+        const n=items.length;
+        const already = n>=2 && items[n-1].card===items[n-2].card && items[n-1].target===items[n-2].target;
+        if(last && last.target!=='dealer' && !last.paired && !already) last=dup(last);
+        else if(!last || last.target==='dealer') pairNext=true;
+      }
+      else if(tk.t==='card'){
+        const it={card:tk.v, target: dealerOnce ? 'dealer' : target};
+        dealerOnce=false; items.push(it); last=it;
+        if(pairNext && it.target!=='dealer'){ pairNext=false; last=dup(it); }
+      }
+    }
+    const onlyCmd = !items.length && !cmd.new && !cmd.split;
+    if(onlyCmd && cmd.undo) return {kind: undo() ? 'undo' : 'nothing'};
+    if(onlyCmd && cmd.repeat) return {kind:'repeat'};
+    if(onlyCmd) return {kind:'nothing'};
+    pushHist();
+    let msg='';
+    if(cmd.new){ resetHand(); msg='リセット'; }
+    if(cmd.split) msg=splitCmd();
+    const correction = !cmd.new && !cmd.split && items.length===1 && items[0].target==='dealer' && inProgress() && state.last!=='DONE';
+    if(correction){ state.dealer=items[0].card; state.last=null; return {kind:'change', msg:''}; }
+    if(items.length){
+      if(!cmd.new && inProgress() && items.length>=3) resetHand();
+      for(const it of items) placeCard(it.card, it.target);
+      msg='';
+    }
+    return {kind:'change', msg};
+  }
+  function advise(rules){
+    if(state.last==='DONE') return null;
+    if(!(state.dealer!=null && state.player.length>=2)){ state.last=null; return null; }
+    const a = decide(state.player, state.dealer, rules, state.splitMode);
+    state.last = a.code;
+    return a;
+  }
+  return {ACT, TERMINAL, handInfo, decide, tokenize, numCards, applyTokens, advise, placeCard, pushHist, undo, resetHand, splitCmd,
+          get state(){ return state; }};
+})();
+/*LOGIC-END*/
+
+// ---------- UI ----------
+const $ = s => document.querySelector(s);
+const RKEY='bj-voice-rules-v1';
+const rules = {surrender:true, h17:false, das:true, echo:true, rate:1.2};
+try{ Object.assign(rules, JSON.parse(localStorage.getItem(RKEY)||'{}')); }catch(e){}
+function saveRules(){ try{ localStorage.setItem(RKEY, JSON.stringify(rules)); }catch(e){} }
+
+let dealerNext=false, lastSpeech='', voice=null;
+const cardLabel = c => c===11 ? 'A' : String(c);
+const sayCard = c => c===11 ? 'エース' : String(c);
+
+/* ---------- 読み上げ ---------- */
+function pickVoice(){
+  try{
+    const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
+    voice = vs.find(v => /Kyoko|O-ren|Otoya|Google/i.test(v.name)) || vs[0] || null;
+  }catch(e){}
+}
+if('speechSynthesis' in window){ pickVoice(); speechSynthesis.addEventListener('voiceschanged', pickVoice); }
+
+let speechId=0, speakingNow=false, unlocked=false;
+function unlockAudio(){
+  if(unlocked) return; unlocked=true;
+  try{ const u=new SpeechSynthesisUtterance('。'); u.volume=0; u.lang='ja-JP'; speechSynthesis.speak(u); }catch(e){}
+}
+function speak(text){
+  if(!text) return;
+  lastSpeech = text;
+  const sy = window.speechSynthesis;
+  if(!sy) return;
+  pauseRecog(); // 自分のイヤホンの声を拾わないよう、読み上げ中はマイクを止める
+  const id = ++speechId;
+  speakingNow = true; updateMicUI();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang='ja-JP'; u.rate=Number(rules.rate)||1.2;
+  if(voice) u.voice=voice;
+  let fb=null;
+  const finish = () => {
+    if(id!==speechId) return;
+    clearTimeout(fb);
+    speakingNow=false; updateMicUI();
+    resumeRecogSoon();
+  };
+  u.onend = u.onerror = finish;
+  fb = setTimeout(finish, 2500 + text.length*260/u.rate);
+  try{
+    if(sy.speaking || sy.pending){ sy.cancel(); setTimeout(()=>sy.speak(u), 60); }
+    else sy.speak(u);
+  }catch(e){ finish(); }
+}
+
+/* ---------- 音声認識（常時オン） ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recog=null, handsfree=false, recActive=false, restartTimer=null;
+const tokLabel = t => t.t==='card' ? cardLabel(t.v) : ({dealer:'ディーラー:', player:'自分:', new:'[次]', undo:'[取消]', repeat:'[もう一回]', split:'[スプリット]', pair:'[ペア]'}[t.t]||'');
+if(SR){
+  recog = new SR();
+  recog.lang='ja-JP';
+  recog.continuous=true;
+  recog.interimResults=false;
+  recog.maxAlternatives=3;
+  recog.onresult = e => {
+    if(speakingNow) return;
+    for(let i=e.resultIndex; i<e.results.length; i++){
+      const r=e.results[i];
+      if(r.isFinal===false) continue;
+      const alts=[]; for(let j=0;j<r.length;j++) alts.push(r[j].transcript||'');
+      let used=null, tks=[];
+      for(const t of alts){ const k=BJ.tokenize(t); if(k.length){ used=t; tks=k; break; } }
+      if(used){
+        $('#heard').textContent = '聞き取り「' + used.trim().slice(-36) + '」→ ' + tks.map(tokLabel).join(' ');
+        handleResult(BJ.applyTokens(tks), true);
+      } else if(alts[0].trim()){
+        $('#heard').textContent = '聞き取り「' + alts[0].trim().slice(-36) + '」→ 札なし';
+      }
+    }
+  };
+  recog.onend = () => {
+    recActive=false;
+    if(handsfree && !speakingNow) resumeRecogSoon(); // 勝手に止まっても自動で再開
+    updateMicUI();
+  };
+  recog.onerror = e => {
+    recActive=false;
+    if(e.error==='not-allowed' || e.error==='service-not-allowed'){
+      handsfree=false; releaseWakeLock();
+      $('#heard').textContent='マイクが許可されていません。Safariの「ぁあ」→ Webサイトの設定 → マイク を「許可」にしてください。';
+    }
+    updateMicUI();
+  };
+}
+function tryStartRecog(){
+  if(!recog || recActive || speakingNow || !handsfree) return;
+  try{ recog.start(); recActive=true; }catch(e){}
+  updateMicUI();
+}
+function pauseRecog(){
+  clearTimeout(restartTimer);
+  if(recog && recActive){ try{ recog.abort(); }catch(e){} recActive=false; }
+}
+function resumeRecogSoon(){
+  clearTimeout(restartTimer);
+  restartTimer = setTimeout(tryStartRecog, 300);
+}
+setInterval(()=>{ if(handsfree && !recActive && !speakingNow) tryStartRecog(); }, 3000);
+
+function toggleHandsfree(){
+  unlockAudio();
+  handsfree = !handsfree;
+  if(handsfree){
+    tryStartRecog(); requestWakeLock();
+    $('#heard').textContent='聞き取り中 — 「10 6 ディーラー 6」のように話してください';
+  } else {
+    pauseRecog(); releaseWakeLock();
+    $('#heard').textContent='聞き取りOFF';
+  }
+  updateMicUI();
+}
+function updateMicUI(){
+  const b=$('#mic'), t=$('#micText');
+  b.classList.remove('on','wait','speak');
+  if(!SR){ b.disabled=true; t.textContent='このブラウザは音声認識に未対応（Safariで開いて）'; return; }
+  if(!handsfree){ t.textContent='🎤 タップで聞き取り開始'; return; }
+  if(speakingNow){ b.classList.add('speak'); t.textContent='🔊 読み上げ中…'; }
+  else if(recActive){ b.classList.add('on'); t.textContent='聞き取り中（タップで停止）'; }
+  else { b.classList.add('wait'); t.textContent='再接続中…（タップで停止）'; }
+}
+
+/* ---------- スリープ防止 ---------- */
+let wakeLock=null;
+async function requestWakeLock(){ try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
+function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && handsfree){ requestWakeLock(); resumeRecogSoon(); }
+});
+
+/* ---------- 表示と判定 ---------- */
+function nextHint(){
+  const s=BJ.state;
+  if(dealerNext) return '次の1枚 → ディーラー';
+  if(s.last==='D') return '次の札 → ダブルで引いた札';
+  if(BJ.TERMINAL.has(s.last)) return s.pending>0 ? `次の札 → スプリット${s.handNo+1}手目` : '次の札 → 新しいハンド';
+  if(s.last==='P') return '次の札 → スプリット1手目の2枚目';
+  if(s.player.length<2) return `次 → 自分の${s.player.length+1}枚目`;
+  if(s.dealer==null) return '次 → ディーラー';
+  return '次 → 引いた札';
+}
+function speechFor(a){
+  const s=BJ.state;
+  let pre='';
+  if(rules.echo){
+    if(s.player.length===2) pre = `${sayCard(s.player[0])}と${sayCard(s.player[1])}、対${sayCard(s.dealer)}、`;
+    else pre = `${a.soft && a.total<=21 ? 'ソフト' : ''}${a.total}、`;
+  }
+  let post='';
+  if(s.dealer===11 && s.player.length===2 && !s.splitMode) post = a.code==='BJ' ? '、イーブンマネーなし' : '、保険なし';
+  return pre + BJ.ACT[a.code] + post;
+}
+function render(adv){
+  const s=BJ.state;
+  const box=$('#advice');
+  let cls='', act='—';
+  if(s.last==='DONE'){
+    const hi=BJ.handInfo(s.player);
+    act = hi.total>21 ? 'バースト' : 'ダブル済';
+    cls = hi.total>21 ? 'a-BUST' : '';
+  } else if(adv){ act=BJ.ACT[adv.code]; cls='a-'+adv.code; }
+  box.className=cls;
+  $('#action').textContent=act;
+  let hand;
+  if(s.player.length){
+    const hi=BJ.handInfo(s.player);
+    hand = '自分 ' + s.player.map(cardLabel).join('+');
+    if(s.player.length>=2) hand += ' = ' + (hi.soft && hi.total<=21 ? 'ソフト' : '') + hi.total;
+  } else hand='自分 —';
+  hand += '　｜　ディーラー ' + (s.dealer!=null ? cardLabel(s.dealer) : '—');
+  $('#hand').textContent=hand;
+  const sub=[];
+  if(s.splitMode) sub.push(`スプリット${s.handNo}手目` + (s.pending ? `（残り${s.pending}手）` : ''));
+  sub.push(nextHint());
+  $('#sub').textContent=sub.join('　');
+  const note=[];
+  if(adv && s.last!=='DONE'){
+    if(adv.code==='D') note.push(adv.raw==='Ds' ? 'ダブル不可ならスタンド' : 'ダブル不可ならヒット');
+    if(adv.code==='R'){
+      const fb=BJ.decide(s.player, s.dealer, Object.assign({}, rules, {surrender:false}), s.splitMode);
+      note.push('サレンダー不可なら' + BJ.ACT[fb.code]);
+    }
+  }
+  if(s.dealer===11 && s.player.length===2 && !s.splitMode && s.last!=='DONE') note.push('インシュランス／イーブンマネーは断る');
+  $('#note').textContent=note.join('　');
+  $('#next').textContent=nextHint();
+  $('#tDealer').classList.toggle('on', dealerNext);
+}
+function afterInput(msg, quiet, fromVoice){
+  const s=BJ.state;
+  const adv=BJ.advise(rules);
+  render(adv);
+  if(quiet) return;
+  let text='';
+  if(s.last==='DONE'){
+    const hi=BJ.handInfo(s.player);
+    text = hi.total>21 ? `${hi.total}、バースト` : `合計${hi.total}`;
+  } else if(adv) text=speechFor(adv);
+  else if(msg) text=msg;
+  else if(fromVoice && s.player.length>=2 && s.dealer==null) text='ディーラーは？';
+  if(text) speak(text);
+}
+function handleResult(res, fromVoice){
+  if(res.kind==='repeat'){ speak(lastSpeech || '入力がまだありません'); return; }
+  if(res.kind==='undo'){ afterInput('取り消し', false, fromVoice); return; }
+  if(res.kind==='change') afterInput(res.msg, false, fromVoice);
+}
+
+/* ---------- ボタン ---------- */
+$('#mic').addEventListener('click', toggleHandsfree);
+const keys=$('#keys');
+[11,2,3,4,5,6,7,8,9,10].forEach(v=>{
+  const b=document.createElement('button');
+  b.innerHTML = v===11 ? 'A' : v===10 ? '10<small>J Q K</small>' : String(v);
+  b.addEventListener('click', ()=>{
+    unlockAudio();
+    BJ.pushHist();
+    BJ.placeCard(v, dealerNext ? 'dealer' : 'auto');
+    dealerNext=false;
+    afterInput();
+  });
+  keys.appendChild(b);
+});
+$('#tDealer').addEventListener('click', ()=>{ dealerNext=!dealerNext; render(BJ.advise(rules)); });
+$('#bUndo').addEventListener('click', ()=>{ unlockAudio(); if(BJ.undo()) afterInput('取り消し'); });
+$('#bSplit').addEventListener('click', ()=>{ unlockAudio(); BJ.pushHist(); afterInput(BJ.splitCmd()); });
+$('#bRepeat').addEventListener('click', ()=>{ unlockAudio(); speak(lastSpeech || '入力がまだありません'); });
+$('#bNew').addEventListener('click', ()=>{ unlockAudio(); BJ.pushHist(); BJ.resetHand(); dealerNext=false; afterInput(null, true); });
+$('#bTest').addEventListener('click', ()=>{ unlockAudio(); speak('スタンド。ヒット。ダブル。イヤホンのテストです'); });
+
+/* ---------- ルール設定 ---------- */
+function ruleSummary(){
+  return ['4〜8デッキ', rules.h17 ? 'H17' : 'S17', rules.das ? 'DAS' : 'DASなし', rules.surrender ? 'サレンダーあり' : 'サレンダーなし'].join('・');
+}
+function syncSegs(){
+  document.querySelectorAll('.segs').forEach(g=>{
+    const key=g.dataset.key;
+    g.querySelectorAll('button').forEach(b=>{
+      let v; try{ v=JSON.parse(b.dataset.v); }catch(e){ v=b.dataset.v; }
+      b.classList.toggle('on', String(rules[key])===String(v));
+    });
+  });
+  $('#rulesum').textContent=ruleSummary();
+}
+document.querySelectorAll('.segs').forEach(g=>{
+  g.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    let v; try{ v=JSON.parse(b.dataset.v); }catch(err){ v=b.dataset.v; }
+    rules[g.dataset.key]=v; saveRules(); syncSegs(); buildChart(); afterInput(null, true);
+  });
+});
+function buildChart(){
+  const ups=[2,3,4,5,6,7,8,9,10,11];
+  const head = '<tr><th></th>' + ups.map(u=>`<th>${u===11?'A':u}</th>`).join('') + '</tr>';
+  const row = (label, cards) => '<tr><th>'+label+'</th>' + ups.map(u=>{
+    const a=BJ.decide(cards, u, rules, false);
+    return `<td class="c-${a.raw[0]}">${a.raw}</td>`;
+  }).join('') + '</tr>';
+  const hard=[[5,[2,3]],[6,[2,4]],[7,[2,5]],[8,[2,6]],[9,[2,7]],[10,[2,8]],[11,[2,9]],[12,[2,10]],[13,[3,10]],[14,[4,10]],[15,[5,10]],[16,[6,10]],['17+',[7,10]]];
+  let h='<table><tr><th class="grp" colspan="11">ハード（合計）</th></tr>'+head + hard.map(([l,c])=>row(l,c)).join('');
+  h+='<tr><th class="grp" colspan="11">ソフト（エース入り）</th></tr>'+head + [2,3,4,5,6,7,8,9].map(x=>row('A,'+x,[11,x])).join('');
+  h+='<tr><th class="grp" colspan="11">ペア</th></tr>'+head + [11,10,9,8,7,6,5,4,3,2].map(v=>{ const l=v===11?'A':v; return row(l+','+l,[v,v]); }).join('');
+  h+='</table>';
+  $('#chart').innerHTML=h;
+}
+
+syncSegs(); buildChart(); render(null); updateMicUI();
+</script>
+</body>
+</html>
