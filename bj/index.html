@@ -91,7 +91,7 @@ td.c-P{background:#2b2042;color:#d2b3ff}td.c-R{background:#43201b;color:#ff9c8f}
 </details>
 
 <details><summary>使い方・話し方</summary><div class="help"><ul>
-  <li><b>🎤ボタンを1回押すと、止めるまでずっと聞き取り</b>。読み上げ中はマイクを止めるので自分のイヤホンの声は拾いません。</li>
+  <li><b>🎤ボタンを1回押すと「聞き取り開始」と声が出て、あとは止めるまでずっと聞き取り</b>。声が出なければイヤホン接続とマナーモードを確認。読み上げ中はマイクを止めるので自分のイヤホンの声は拾いません。</li>
   <li>Safariで開く。マイクの確認が出たら「許可」。画面はスリープしないようにしてあります（画面を消すと聞き取りも止まります）。</li>
   <li>順番は<b>自分の2枚 → ディーラー</b>。例 <span class="k">10 6 ディーラー 6</span> <span class="k">テン ロク 対 ロク</span></li>
   <li><b>ディーラー／対</b>の直後の1枚がディーラー、<b>自分</b>の後は自分の札。<span class="k">ディーラー エース 自分 9 7</span> もOK</li>
@@ -102,6 +102,8 @@ td.c-P{background:#2b2042;color:#d2b3ff}td.c-R{background:#43201b;color:#ff9c8f}
   <li>ディーラーの札だけ言い直すと訂正：<span class="k">ディーラー 10</span></li>
   <li>スプリット指示の後は1手目の2枚目を言うだけ。1手目が終わったら次の札で2手目へ。</li>
   <li><span class="k">取り消し</span> <span class="k">もう一回</span> <span class="k">スプリット</span></li>
+  <li><b>設定も声で</b>：<span class="k">サレンダーなし</span> <span class="k">ソフト17ヒット</span> <span class="k">ルール</span>（今の設定を読み上げ） <span class="k">速く</span> <span class="k">ゆっくり</span> <span class="k">指示だけ</span> <span class="k">ヘルプ</span> <span class="k">停止</span></li>
+  <li>聞き取れなかった時は「もう一度」と返します。</li>
   <li>絵札は「テン」「キング」等、エースは「エース」と言うと誤認識しにくい。</li>
   <li>4〜8デッキ用の基本戦略です。インシュランス（保険）は常に断るのが基本戦略。</li>
 </ul></div></details>
@@ -388,15 +390,13 @@ function pickVoice(){
 if('speechSynthesis' in window){ pickVoice(); speechSynthesis.addEventListener('voiceschanged', pickVoice); }
 
 let speechId=0, speakingNow=false, unlocked=false;
-function unlockAudio(){
-  if(unlocked) return; unlocked=true;
-  try{ const u=new SpeechSynthesisUtterance('。'); u.volume=0; u.lang='ja-JP'; speechSynthesis.speak(u); }catch(e){}
-}
+function unlockAudio(){ unlocked=true; }
 function speak(text){
   if(!text) return;
   lastSpeech = text;
   const sy = window.speechSynthesis;
   if(!sy) return;
+  const wasListening = recActive;
   pauseRecog(); // 自分のイヤホンの声を拾わないよう、読み上げ中はマイクを止める
   const id = ++speechId;
   speakingNow = true; updateMicUI();
@@ -412,10 +412,15 @@ function speak(text){
   };
   u.onend = u.onerror = finish;
   fb = setTimeout(finish, 2500 + text.length*260/u.rate);
-  try{
-    if(sy.speaking || sy.pending){ sy.cancel(); setTimeout(()=>sy.speak(u), 60); }
-    else sy.speak(u);
-  }catch(e){ finish(); }
+  const go = () => {
+    if(id!==speechId) return;
+    try{
+      if(sy.speaking || sy.pending){ sy.cancel(); setTimeout(()=>sy.speak(u), 60); }
+      else sy.speak(u);
+    }catch(e){ finish(); }
+  };
+  // マイク使用直後は音声の出力切替に少し待つ（ボタン操作時はすぐ話す＝iPhoneの音声ロック解除）
+  if(wasListening) setTimeout(go, 200); else go();
 }
 
 /* ---------- 音声認識（常時オン） ---------- */
@@ -434,13 +439,17 @@ if(SR){
       const r=e.results[i];
       if(r.isFinal===false) continue;
       const alts=[]; for(let j=0;j<r.length;j++) alts.push(r[j].transcript||'');
+      const cmdAlt = alts.find(t => voiceCommand(t, true));
+      if(cmdAlt!==undefined){ $('#heard').textContent = '聞き取り「' + cmdAlt.trim().slice(-36) + '」→ 設定・操作'; voiceCommand(cmdAlt, false); continue; }
       let used=null, tks=[];
       for(const t of alts){ const k=BJ.tokenize(t); if(k.length){ used=t; tks=k; break; } }
       if(used){
         $('#heard').textContent = '聞き取り「' + used.trim().slice(-36) + '」→ ' + tks.map(tokLabel).join(' ');
         handleResult(BJ.applyTokens(tks), true);
       } else if(alts[0].trim()){
-        $('#heard').textContent = '聞き取り「' + alts[0].trim().slice(-36) + '」→ 札なし';
+        const t0 = alts[0].trim();
+        $('#heard').textContent = '聞き取り「' + t0.slice(-36) + '」→ 札なし';
+        if(t0.replace(/\s/g,'').length <= 10) speak('もう一度');
       }
     }
   };
@@ -454,6 +463,7 @@ if(SR){
     if(e.error==='not-allowed' || e.error==='service-not-allowed'){
       handsfree=false; releaseWakeLock();
       $('#heard').textContent='マイクが許可されていません。Safariの「ぁあ」→ Webサイトの設定 → マイク を「許可」にしてください。';
+      speak('マイクが許可されていません。サファリの設定でマイクを許可してください');
     }
     updateMicUI();
   };
@@ -477,11 +487,14 @@ function toggleHandsfree(){
   unlockAudio();
   handsfree = !handsfree;
   if(handsfree){
-    tryStartRecog(); requestWakeLock();
+    requestWakeLock();
     $('#heard').textContent='聞き取り中 — 「10 6 ディーラー 6」のように話してください';
+    if(window.speechSynthesis) speak('聞き取り開始'); // 読み上げ後に自動で聞き取り開始
+    else tryStartRecog();
   } else {
     pauseRecog(); releaseWakeLock();
     $('#heard').textContent='聞き取りOFF';
+    speak('聞き取り停止');
   }
   updateMicUI();
 }
@@ -493,6 +506,44 @@ function updateMicUI(){
   if(speakingNow){ b.classList.add('speak'); t.textContent='🔊 読み上げ中…'; }
   else if(recActive){ b.classList.add('on'); t.textContent='聞き取り中（タップで停止）'; }
   else { b.classList.add('wait'); t.textContent='再接続中…（タップで停止）'; }
+}
+
+/* ---------- 音声コマンド（設定・操作） ---------- */
+function rulesSpeech(){
+  return `サレンダー${rules.surrender?'あり':'なし'}、ソフト17はディーラー${rules.h17?'ヒット':'スタンド'}、スプリット後ダブル${rules.das?'あり':'なし'}`;
+}
+const HELP_SPEECH = '自分の2枚、ディーラー、の順に話してください。例えば、10、6、ディーラー6。ヒットしたら引いた札だけ。次、で新しいハンド。取り消し、もう一回、スプリット、ルール、停止、も使えます';
+function setRule(key, v, say){ rules[key]=v; saveRules(); syncSegs(); buildChart(); afterInput(null, true); speak(say); }
+// check=true: 判定だけ（コマンドならtrue）
+function voiceCommand(raw, check){
+  const t = String(raw||'').normalize('NFKC').replace(/\s/g,'').replace(/[。、.,!！?？]/g,'').toLowerCase();
+  if(!t) return false;
+  const on = /(あり|有り|有|オン|on|する|可能|ok)$/, off = /(なし|無し|無|オフ|off|しない|不可|ダメ|だめ)$/;
+  let m;
+  if(/サレンダー/.test(t) && (on.test(t) || off.test(t))){
+    if(!check){ const v = !off.test(t); setRule('surrender', v, 'サレンダー' + (v?'あり':'なし')); }
+    return true;
+  }
+  if((m = t.match(/^(?:ソフト|soft)?17(?:は|で)?(?:ディーラー)?(ヒット|hit|スタンド|stand)/)) || (m = t.match(/^(h17|s17|エイチ17|エス17)$/))){
+    if(!check){ const v = /ヒット|hit|h17|エイチ/.test(m[1]); setRule('h17', v, 'ソフト17はディーラー' + (v?'ヒット':'スタンド')); }
+    return true;
+  }
+  if(/(das|ダブルアフタースプリット|スプリット後(?:の)?ダブル)/.test(t) && (on.test(t) || off.test(t))){
+    if(!check){ const v = !off.test(t); setRule('das', v, 'スプリット後のダブル' + (v?'あり':'なし')); }
+    return true;
+  }
+  if(/^(?:今の)?(?:ルール|設定)(?:は|確認|を教えて)?$/.test(t)){ if(!check) speak(rulesSpeech()); return true; }
+  if(/^(?:ヘルプ|使い方|help|つかいかた)/.test(t)){ if(!check) speak(HELP_SPEECH); return true; }
+  if(/^(?:もっと)?(?:速く|早く|はやく|早口)/.test(t)){ if(!check){ rules.rate = Math.round(Math.min(1.6, (Number(rules.rate)||1.2)+0.15)*100)/100; saveRules(); syncSegs(); speak('速くします'); } return true; }
+  if(/^(?:もっと)?(?:ゆっくり|遅く|おそく)/.test(t)){ if(!check){ rules.rate = Math.round(Math.max(0.8, (Number(rules.rate)||1.2)-0.15)*100)/100; saveRules(); syncSegs(); speak('ゆっくりにします'); } return true; }
+  if(/^(?:指示だけ|短く)/.test(t)){ if(!check) setRule('echo', false, '指示だけ読みます'); return true; }
+  if(/^(?:札も|詳しく|長く)/.test(t)){ if(!check) setRule('echo', true, '札も読みます'); return true; }
+  if(/^(?:テスト|test|聞こえる)/.test(t)){ if(!check) speak('聞こえています'); return true; }
+  if(/^(?:停止|ストップ|stop|終了|終わり|おわり)$/.test(t)){
+    if(!check){ handsfree=false; pauseRecog(); releaseWakeLock(); $('#heard').textContent='聞き取りOFF（ボタンで再開）'; speak('聞き取り停止。再開はボタンで'); updateMicUI(); }
+    return true;
+  }
+  return false;
 }
 
 /* ---------- スリープ防止 ---------- */
@@ -571,8 +622,12 @@ function afterInput(msg, quiet, fromVoice){
     const hi=BJ.handInfo(s.player);
     text = hi.total>21 ? `${hi.total}、バースト` : `合計${hi.total}`;
   } else if(adv) text=speechFor(adv);
-  else if(msg) text=msg;
+  else if(msg && msg!=='取り消し') text=msg;
   else if(fromVoice && s.player.length>=2 && s.dealer==null) text='ディーラーは？';
+  else if(fromVoice && s.player.length===1 && !s.splitMode) text='自分の2枚目は？';
+  else if(fromVoice && s.player.length===0 && s.dealer!=null) text='自分の札は？';
+  if(msg==='取り消し' && text && text!=='取り消し') text='取り消し。'+text;
+  else if(msg==='取り消し' && !text) text='取り消し';
   if(text) speak(text);
 }
 function handleResult(res, fromVoice){
