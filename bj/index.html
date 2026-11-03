@@ -239,7 +239,7 @@ const BJ = (() => {
     ['dealer', /(?:ディーラー|でぃーらー|ディラー|dealer|親|相手|向こう|対|たい|vs\.?|versus|バーサス|ばーさす)(?:さん)?/iy],
     ['player', /(?:自分|じぶん|俺|おれ|僕|ぼく|私|わたし|プレイヤー|プレーヤー|player|手札|てふだ)/iy],
     ['skip',   /(?:ハード|はーど|hard|合計|ごうけい)/iy],
-    ['c11',    /(?:エース|えーす|エイス|ace|いち|イチ)/iy],
+    ['c11',    /(?:エース|えーす|エイス|エーズ|ace|いち|イチ)/iy],
     ['c10',    /(?:テン|てん|ten|じゅう|ジュウ|ジャック|じゃっく|jack|クイーン|クィーン|くいーん|queen|キング|きんぐ|king|絵札|えふだ)/iy],
     ['c9',     /(?:ナイン|ないん|nine|きゅう|キュウ)/iy],
     ['c8',     /(?:エイト|えいと|eight|はち|ハチ)/iy],
@@ -254,6 +254,7 @@ const BJ = (() => {
   ];
   function tokenize(raw){
     let s = String(raw||'').normalize('NFKC');
+    s = s.replace(/(^|[^A-Za-z])(a'?s|aces)(?![A-Za-z])/gi, '$1 エース '); // 「エース」が英語の As / A's になることがある
     s = s.replace(/(^|[^A-Za-z])([AJQK])(?![A-Za-z])/g, (m,p,l)=> p + (l==='A' ? ' エース ' : ' テン '));
     const out=[]; let i=0;
     outer: while(i<s.length){
